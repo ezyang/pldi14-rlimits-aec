@@ -1,3 +1,70 @@
-This folder contains code for our Happstack experiments.
+This folder contains code for our Happstack experiments.  It
+comes in two parts.  First is the patched version of Happstack
+to use resource limits in 'happstack-server-7.3.3'; the patch
+is enclosed below for your easy reading.  The second is the 'pong'
+benchmark, which was used to run some numbers, and also test
+Happstack's vulnerability to infinite HTTP header attacks.
 
+Building
+--------
 
+Reproducing the Happstack bug
+-----------------------------
+
+Patch
+-----
+
+diff --git a/happstack-server.cabal b/happstack-server.cabal
+index ac16c7a..35479b3 100644
+--- a/happstack-server.cabal
++++ b/happstack-server.cabal
+@@ -94,7 +94,8 @@ Library
+                        transformers-base >= 0.4 && < 0.5,
+                        utf8-string >= 0.3.4 && < 0.4,
+                        xhtml,
+-                       zlib
++                       zlib,
++                       rlimits
+ 
+   if flag(network_2_2_3)
+     Build-Depends:     network >= 2.2.3
+diff --git a/src/Happstack/Server/Internal/Listen.hs b/src/Happstack/Server/Internal/Listen.hs
+index f78fe72..991b265 100644
+--- a/src/Happstack/Server/Internal/Listen.hs
++++ b/src/Happstack/Server/Internal/Listen.hs
+@@ -27,6 +27,11 @@ import System.Posix.Signals
+ #endif
+ -}
+ import System.Log.Logger (Priority(..), logM)
++
++import System.Environment
++import Control.RLimits
++
++
+ log':: Priority -> String -> IO ()
+ log' = logM "Happstack.Server.HTTP.Listen"
+ 
+@@ -91,14 +96,22 @@ listen' s conf hand = do
+                Nothing -> forkIO
+                Just tg -> \m -> fst `liftM` TG.forkIO tg m
+   tm <- initialize ((timeout conf) * (10^(6 :: Int)))
++  rc_test <- (fmap read) `fmap` lookupEnv "RC_TEST"
+   -- http:// loop
+   log' NOTICE ("Listening for http:// on port " ++ show port')
++  parent <- getCurrentRC
+   let eh (x::SomeException) = when ((fromException x) /= Just ThreadKilled) $ log' ERROR ("HTTP request failed with: " ++ show x)
+       work (sock, hn, p) =
+           do tid <- myThreadId
+              thandle <- register tm (killThread tid)
+              let timeoutIO = TS.timeoutSocketIO thandle sock
+-             request timeoutIO (logAccess conf) (hn,fromIntegral p) hand `E.catch` eh
++             case rc_test of
++                Nothing ->
++                    request timeoutIO (logAccess conf) (hn,fromIntegral p) hand `E.catch` eh
++                Just l -> do
++                     rc <- newRC l parent
++                     (withRC rc $ request timeoutIO (logAccess conf) (hn,fromIntegral p) hand) `E.catch` eh
++                     killRC rc
+              -- remove thread from timeout table
+              cancel thandle
+              sClose sock
