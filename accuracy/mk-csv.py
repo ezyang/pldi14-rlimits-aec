@@ -15,4 +15,4 @@ for l in open(sys.argv[1] + ".txt"):
         r.append(int(l))
 
 for r in rs:
-    print "%s,%d,%d,%d,%d" % (lookup[r[ix_t]], r[ix_k]*4096, delta(r,ix_census), delta(r,ix_blocks), delta(r,ix_valgrind))
+    print("%s,%d,%d,%d,%d" % (lookup[r[ix_t]], r[ix_k]*4096, delta(r,ix_census), delta(r,ix_blocks), delta(r,ix_valgrind)))

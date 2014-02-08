@@ -1,3 +1,7 @@
 *.hi
 *.o
-accuracy
+damp
+__pycache__
+massif.out
+*.txt
+*.csv
