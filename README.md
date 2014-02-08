@@ -176,7 +176,7 @@ main = startCM $ do
 What is the first argument to `rcFork`?  This argument specifies
 what resource containers the thread may access (read as "the
 singleton set (`ss`) containing `rc` unioned (`su`) with the
-current set of accessible containers).  This same format is also
+current set of accessible containers").  This same format is also
 used for `RCRef` and `RCLMVar`, which means of cross-thread
 communication.
 
