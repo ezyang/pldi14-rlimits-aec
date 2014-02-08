@@ -1,0 +1,5 @@
+This folder contains code for our Happstack patch.  This actually comes
+in two parts.  The first part is an unpatched, latest version of Happstack,
+and a short exploit which OOM's the server.  The second part is a patched
+version of Happstack, and a httperf benchmark for testing the overhead
+of rapidly spawning resource containers.
