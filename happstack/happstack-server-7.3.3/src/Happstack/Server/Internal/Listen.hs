@@ -28,7 +28,6 @@ import System.Posix.Signals
 -}
 import System.Log.Logger (Priority(..), logM)
 
-import Data.Pool
 import System.Environment
 import Control.RLimits
 
@@ -51,6 +50,7 @@ listenOn portm = do
         (sClose)
         (\sock -> do
             setSocketOption sock ReuseAddr 1
+            setSocketOption sock NoDelay 1
             bindSocket sock (SockAddrInet (fromIntegral portm) iNADDR_ANY)
             Socket.listen sock (max 1024 maxListenQueue)
             return sock
@@ -67,6 +67,7 @@ listenOnIPv4 ip portm = do
         (sClose)
         (\sock -> do
             setSocketOption sock ReuseAddr 1
+            setSocketOption sock NoDelay 1
             bindSocket sock (SockAddrInet (fromIntegral portm) hostAddr)
             Socket.listen sock (max 1024 maxListenQueue)
             return sock
@@ -98,7 +99,7 @@ listen' s conf hand = do
   rc_test <- (fmap read) `fmap` lookupEnv "RC_TEST"
   -- http:// loop
   log' NOTICE ("Listening for http:// on port " ++ show port')
-  parent <- getCurrentRC ()
+  parent <- getCurrentRC
   let eh (x::SomeException) = when ((fromException x) /= Just ThreadKilled) $ log' ERROR ("HTTP request failed with: " ++ show x)
       work (sock, hn, p) =
           do tid <- myThreadId
