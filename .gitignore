@@ -8,3 +8,4 @@ massif.out
 *.csv
 *.swp
 dist
+results
