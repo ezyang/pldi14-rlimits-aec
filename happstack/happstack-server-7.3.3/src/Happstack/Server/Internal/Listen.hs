@@ -27,6 +27,12 @@ import System.Posix.Signals
 #endif
 -}
 import System.Log.Logger (Priority(..), logM)
+
+import Data.Pool
+import System.Environment
+import Control.RLimits
+
+
 log':: Priority -> String -> IO ()
 log' = logM "Happstack.Server.HTTP.Listen"
 
@@ -45,7 +51,6 @@ listenOn portm = do
         (sClose)
         (\sock -> do
             setSocketOption sock ReuseAddr 1
-            setSocketOption sock NoDelay 1
             bindSocket sock (SockAddrInet (fromIntegral portm) iNADDR_ANY)
             Socket.listen sock (max 1024 maxListenQueue)
             return sock
@@ -62,7 +67,6 @@ listenOnIPv4 ip portm = do
         (sClose)
         (\sock -> do
             setSocketOption sock ReuseAddr 1
-            setSocketOption sock NoDelay 1
             bindSocket sock (SockAddrInet (fromIntegral portm) hostAddr)
             Socket.listen sock (max 1024 maxListenQueue)
             return sock
@@ -91,14 +95,22 @@ listen' s conf hand = do
                Nothing -> forkIO
                Just tg -> \m -> fst `liftM` TG.forkIO tg m
   tm <- initialize ((timeout conf) * (10^(6 :: Int)))
+  rc_test <- (fmap read) `fmap` lookupEnv "RC_TEST"
   -- http:// loop
   log' NOTICE ("Listening for http:// on port " ++ show port')
+  parent <- getCurrentRC ()
   let eh (x::SomeException) = when ((fromException x) /= Just ThreadKilled) $ log' ERROR ("HTTP request failed with: " ++ show x)
       work (sock, hn, p) =
           do tid <- myThreadId
              thandle <- register tm (killThread tid)
              let timeoutIO = TS.timeoutSocketIO thandle sock
-             request timeoutIO (logAccess conf) (hn,fromIntegral p) hand `E.catch` eh
+             case rc_test of
+                Nothing ->
+                    request timeoutIO (logAccess conf) (hn,fromIntegral p) hand `E.catch` eh
+                Just l -> do
+                     rc <- newRC l parent
+                     (withRC rc $ request timeoutIO (logAccess conf) (hn,fromIntegral p) hand) `E.catch` eh
+                     killRC rc
              -- remove thread from timeout table
              cancel thandle
              sClose sock

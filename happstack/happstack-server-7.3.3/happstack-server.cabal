@@ -94,7 +94,8 @@ Library
                        transformers-base >= 0.4 && < 0.5,
                        utf8-string >= 0.3.4 && < 0.4,
                        xhtml,
-                       zlib
+                       zlib,
+                       rlimits
 
   if flag(network_2_2_3)
     Build-Depends:     network >= 2.2.3
