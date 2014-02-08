@@ -12,6 +12,7 @@ import Foreign.C.String
 import Foreign.StablePtr
 import GHC.Stats
 import Data.Array.IO
+import Data.Word
 
 import Control.RLimits
 
