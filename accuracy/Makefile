@@ -1,17 +1,20 @@
 GHC=/home/hs01/ezyang/ghc-alloc/inplace/bin/ghc-stage2
+FAST=1
 
 damp:
 	${GHC} --make Main.hs -package ghc -o damp -rtsopts -fforce-recomp
 
-tests:
+init:
 	./script.sh init
-	./script.sh runtests 0
-	./generate-data.sh tests.csv
 
-fast:
-	./script.sh init
-	./script.sh runtests 1
-	./generate-data.sh fast.csv
+tests: init
+	./script.sh runtests ${FAST}
+
+data.csv: tests
+	./generate-data.sh data.csv
+
+data.pdf: data.csv
+	R --no-save < do.R
 
 build-deps:
 	cabal install --with-ghc=${GHC} ghc-paths
