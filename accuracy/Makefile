@@ -1,7 +1,7 @@
 GHC=/home/hs01/ezyang/ghc-alloc/inplace/bin/ghc-stage2
 FAST=1
 
-damp:
+damp: Main.hs
 	${GHC} --make Main.hs -package ghc -o damp -rtsopts -fforce-recomp
 
 init:
