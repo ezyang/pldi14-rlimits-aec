@@ -2,8 +2,8 @@
 
 This page describes the set of GHC patches and support libraries, as
 well as evaluation code, for the paper
-[Resource Limits for Haskell](http://example.com).  You can access our artifact via
-[this VM image.](http://example.com).  The VM is a minimal Arch Linux
+[Resource Limits for Haskell](http://ezyang.com/papers/ezyang14-rlimits.pdf).  You can access our artifact via
+[this 7 GB VM image (Warning: this is an SCS lab hosted machine.  We have turned off logging though!)](http://hs01.scs.stanford.edu/rlimits.vmdk).  The VM is a minimal Arch Linux
 distribution with a complete build of GHC and associated libraries.  The
 root password is 'rlimits' (no quotes), and there is a user named
 'lambda' in which the software has been placed.
