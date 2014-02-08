@@ -12,7 +12,7 @@ function run_test {
     echo $K >> $ARG.txt
     if [ $T -eq 7 ]; then
         # Don't use valgrind for the GHC test, it takes too long!
-        ./damp $T $N $K +RTS -T -kc16k >> $ARG.txt
+        ./damp $T $N $K +RTS -T >> $ARG.txt
         echo "0" >> $ARG.txt
     else
         valgrind --tool=massif --pages-as-heap=yes --massif-out-file=massif.out ./damp $T $N $K +RTS -T -kc16k >> $ARG.txt

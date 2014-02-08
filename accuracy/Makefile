@@ -1,16 +1,18 @@
 GHC=/home/hs01/ezyang/ghc-alloc/inplace/bin/ghc-stage2
 FAST=1
 
+.PHONY: init tests build-deps
+
 damp: Main.hs
 	${GHC} --make Main.hs -package ghc -o damp -rtsopts -fforce-recomp
 
-init:
+init: damp
 	./script.sh init
 
-tests: init
+tests: damp
 	./script.sh runtests ${FAST}
 
-data.csv: tests
+data.csv: init tests
 	./generate-data.sh data.csv
 
 data.pdf: data.csv
