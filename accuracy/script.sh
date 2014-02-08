@@ -3,7 +3,7 @@ ARG=$1
 
 set -e -x verbose
 
-rm $ARG.txt
+rm $ARG.txt || true
 
 function run_test {
     echo $T >> $ARG.txt
