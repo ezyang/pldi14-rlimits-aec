@@ -1,0 +1,37 @@
+This folder contains code to run the experiments for "Resource limit
+accuracy", including generation of graphics.
+
+QUICK START
+-----------
+
+The full experiment can be run using:
+
+    make data.pdf
+
+However, this will take a little bit of time.  Impatient people can get
+some quick results by running:
+
+    make data.pdf FAST=1
+
+STRUCTURE
+---------
+
+Main.hs compiles into 'damp' (don't ask), which is a program which
+takes three arguments:
+
+    ./damp TESTNO INPUTSIZE RLIMITPAGES
+
+Test numbers correspond to the following tests:
+
+        0: "retainer",
+        1: "opl",
+        3: "suml",
+        4: "tree",
+        5: "small",
+        6: "large",
+        7: "ghc",
+        8: "block",
+        9: "megablock"
+
+There are a few more tests here than in the paper, but their outputs
+look the same as other tests, so they were omitted.
