@@ -7,3 +7,4 @@ massif.out
 *.txt
 *.csv
 *.swp
+dist
