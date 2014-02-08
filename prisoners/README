@@ -1,0 +1,20 @@
+This folder contains code for the prisoner's dilemma example.
+
+Quick Start
+-----------
+
+Build with:
+
+    make
+
+You can run with:
+
+    ./Prisoners
+
+To see memory usage over time, run with detailed GC statistics.
+
+    ./Prisoners +RTS -S
+
+Sorry, no automatic graphics this time.  (I made a small patch to the
+runtime system to collect this data in a machine-readable format, which
+is fiddly to setup.)

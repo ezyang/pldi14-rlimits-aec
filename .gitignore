@@ -1,6 +1,7 @@
 *.hi
 *.o
-damp
+accuracy/damp
+prisoners/Prisoners
 __pycache__
 massif.out
 *.txt
