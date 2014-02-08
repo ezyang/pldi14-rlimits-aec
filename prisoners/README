@@ -1,4 +1,7 @@
 This folder contains code for the prisoner's dilemma example.
+It's implemented two ways: once using the raw resource limits API
+exposed by GHC (PrisonersRaw) and once using the resource limits
+monad (Prisoners).
 
 Quick Start
 -----------

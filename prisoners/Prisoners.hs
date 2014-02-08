@@ -1,8 +1,7 @@
-{-# LANGUAGE NoMonomorphismRestriction, DeriveDataTypeable #-}
+{-# LANGUAGE BangPatterns #-}
 
 import Control.Concurrent
 import Control.Concurrent.MVar
-import Control.Concurrent.Async
 import Control.Monad
 import Control.Exception
 import System.Timeout
@@ -13,9 +12,11 @@ import Data.Typeable
 import System.Mem
 import Data.Word
 
-import Control.RLimits
+import Control.Monad.RLimits
+import Data.SafeCopy
 
 -- Prisoner's dilemma in Haskell
+--      Variant using the CM monad API
 --
 -- Architecture:
 --      A prisoner is a thread running in a monad M. It is
@@ -34,7 +35,7 @@ import Control.RLimits
 --          everything that happened previously (he will hit a resource
 --          limit)
 
-type M = IO
+type M = CM
 
 p1 play = play True >>= f
     where f prev = play prev >>= f
@@ -46,7 +47,10 @@ p3 play = play False >> p3 play
 
 p4 play = play True >> p4 play
 
-play cin cout x = x `seq` putMVar cout x >> takeMVar cin
+-- Since players may hold references to the control thread, no copying
+-- is necessary here!  (If the control thread dies, we're in trouble
+-- anyway)
+play cin cout x = putRCMVar cout x >> takeRCMVar cin
 
 -- parameters
 t = 4 -- defect/cooperate
@@ -59,47 +63,64 @@ score True False = s
 score False True = t
 score False False = p
 
-data E = E Int
-    deriving (Show, Typeable)
-instance Exception E
+main = startCM program
 
-handler mv i m = m `catch` h
-    where h HeapOverflow = putMVar mv ()
-          h _ = return ()
+croak = liftIOTCB . putStrLn
+cleanup = liftIOTCB $ replicateM_ 2 performGC
 
-main = do
-    let players = [p1, p2, p3, p4] :: [(Bool -> IO Bool) -> IO ()]
-    scores <- mapM (const (newIORef 0)) players
-    parent_rc <- getCurrentRC ()
-    forM_ (zip3 [1..] players scores) $ \(i,p,s) -> do
-        forM_ (zip3 [1..] players scores) $ \(i',p',s') -> do
+-- This example uses 'RCMVar's, which are to 'MVars' as 'RCRefs' are to
+-- 'IORefs'.  They're not in the paper, but they work as you'd expect.
+program = do
+    let players = zip [1..] ([p1, p2, p3, p4] :: [(Bool -> M Bool) -> M ()])
+    c <- getCurrentLabel
+    forM_ players $ \(i,p) -> do
+        forM_ players $ \(i',p') -> do
             when (i /= i') $ do
-            cin <- newEmptyMVar
-            cin' <- newEmptyMVar
-            cout <- newEmptyMVar
-            cout' <- newEmptyMVar
-            dead <- newEmptyMVar
-            dead' <- newEmptyMVar
-            rc <- newRC 500 parent_rc
-            rc' <- newRC 500 parent_rc
-            t <- forkIO . handler dead i . withRC rc $ p (play cin cout)
-            t' <- forkIO . handler dead' i' . withRC rc' $ p' (play cin' cout')
-            run1 <- async . replicateM_ 500000 $ do
-                r <- takeMVar cout
-                r' <- takeMVar cout'
-                putMVar cin r'
-                putMVar cin' r
-                modifyIORef' s (+ score r r')
-                modifyIORef' s' (+ score r' r)
-            run2 <- async (takeMVar dead)
-            run3 <- async (takeMVar dead')
-            waitAnyCancel [run1, run2, run3]
-            killThread t
-            killThread t'
-            killRC rc
-            killRC rc'
-            -- final_scores <- mapM readIORef scores
-            -- print final_scores
-            performGC
-            performGC
-            performGC
+            rc <- newRC 500
+            rc' <- newRC 500
+            rcf <- newRC 500
+            cin <- newEmptyRCMVar (ss rcf `su` c)
+            cin' <- newEmptyRCMVar (ss rcf `su` c)
+            cout <- newEmptyRCMVar (ss rcf `su` ss rc `su` c)
+            cout' <- newEmptyRCMVar (ss rcf `su` ss rc' `su` c)
+            flag <- newEmptyRCMVar (ss rcf `su` c)
+            -- Start off the player processes
+            t  <- rcFork (ss rc  `su` c) . withRC rc  $ p  (play cin  cout)
+            t' <- rcFork (ss rc' `su` c) . withRC rc' $ p' (play cin' cout')
+            -- Here, we use a little idiom for blocking on the completion
+            -- of a thread, which in the case of an infinitely looping
+            -- thread, indicates that the thread ran out of resource
+            -- limits.
+            rcFork (ss rcf `su` c) . withRC rcf $ do
+                rcCopyResult t trPrim
+                croak ("player " ++ show i ++ " killed!")
+                putRCMVar flag LT
+            rcFork (ss rcf `su` c) . withRC rcf $ do
+                rcCopyResult t' trPrim
+                croak ("player " ++ show i' ++ " killed!")
+                putRCMVar flag GT
+            -- Notice that the control thread also is given its
+            -- own resource container...
+            rcFork (ss rcf `su` c) . withRC rcf $ do
+                let loop 0 x x' = return (x, x')
+                    -- ...if you remove the bang-patterns here, you
+                    -- get a space leak, and the control thread is
+                    -- blamed, as you would expect!
+                    loop n !x !x' = do
+                        r <- copyRCMVar cout trPrim
+                        r' <- copyRCMVar cout' trPrim
+                        putRCMVar cin r'
+                        putRCMVar cin' r
+                        loop (n-1) (x + score r r') (x' + score r' r)
+                (x, x') <- loop 500000 0 0
+                putRCMVar flag (compare x x')
+            result <- copyRCMVar flag trPrim
+            croak ("result: " ++ show i ++ " " ++ show result ++ " " ++ show i')
+            rcKill rc
+            rcKill rc'
+            -- This kills any control threads which may still be waiting
+            -- on MVars which are now dead.
+            rcKill rcf
+            -- Just a little trick to encourage killed resource
+            -- containers to go away, not strictly necessary.
+            cleanup
