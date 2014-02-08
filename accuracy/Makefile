@@ -1,4 +1,4 @@
-GHC=/home/hs01/ezyang/ghc-alloc/inplace/bin/ghc-stage2
+GHC=ghc
 FAST=1
 
 .PHONY: init tests build-deps
