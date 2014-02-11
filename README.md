@@ -4,17 +4,22 @@ This page describes the set of GHC patches and support libraries, as
 well as evaluation code, for the paper
 [Resource Limits for Haskell](http://ezyang.com/papers/ezyang14-rlimits.pdf).  You can access our artifact via
 [this 7 GB VM image (Warning: this is an SCS lab hosted machine.  We have turned off logging though!)](http://hs01.scs.stanford.edu/rlimits.vmdk).  The VM is a minimal Arch Linux
-distribution with a complete build of GHC and associated libraries.  The
-root password is 'rlimits' (no quotes), and there is a user named
-'lambda' in which the software has been placed.
+distribution with a complete build of GHC and associated libraries.
+There is a user 'lambda' with password 'rlimits'. (The root password
+is also the same).
 
 lambda's home directory contains the following:
+
+* `pldi14-rlimits-aec` contains instructions on how to replicate all
+  of the measurements seen in the evaluation section of the paper.
+  There are three subfolders, and each contains a `README` with further
+  instructions.  You can also view the READMEs by browsing this Git
+  repository.
 
 * `ghc` contains the build-tree of our patched version of GHC 7.8 with
   support for resource limits.  It has been installed to `/usr/local`,
   so if you type `ghc --version` you will be using our copy of GHC.
-  You can view the patchset that was applied using `git log` (this
-  author likes to think that it is a very clean, orderly patchset), but
+  You can view the patchset that was applied using `git log`, but
   to run our software, you don't have to interact with this directory.
 
 * `rlimits` contains the primary auxiliary library support for resource
@@ -22,17 +27,11 @@ lambda's home directory contains the following:
   Control.Monad.RLimits described in Section 3 of the paper.  As with
   `ghc`, the library has already been installed, so you don't have to
   interact with this directory, except to look at the source code.
-
-* `pldi14-rlimits-aec` contains instructions on how to replicate all
-  of the measurements seen in the evaluation section of the paper.
-  There are three subfolders, and each contains a `README` with further
-  instructions (usually `make` and run).
+  This code is available at https://github.com/ezyang/rlimits
 
 ## Tutorial
 
-This tutorial assumes some familiarity with Haskell, though
-non-Haskellers should be able to eyeball what the code is doing
-nonetheless.
+This tutorial assumes some familiarity with Haskell.
 
 ### Raw resource limits
 
@@ -47,13 +46,14 @@ import Control.RLimits
 main = putStrLn "Hello World!"
 ```
 
-You can build the file using `ghc -O --make 1.hs`.
+You can build the file using `ghc -O --make 1.hs`, which results in an
+executable named `1`.
 
 `Control.RLimits` provides the low-level access to the resource-limits
 API as described in section 2.  We can write a short program which
 creates a resource container (`newRC`), switches into it (`withRC`), and
-exhausts its space resources (for contrived examples, this can be quite
-tricky; more on this later).
+exhausts its space resources (for synthetic examples, this can be a little
+tricky; more on this later):
 
 ```haskell
 -- 2.hs
@@ -68,49 +68,48 @@ main = do
     withRC rc (loop [1])
 
 loop n = do
-    n <- evaluate n
+    _ <- evaluate (length n)
     loop (n ++ n)
 ```
 
-When you run this program, it exits with a heap overflow.
+When you run this program, it exits with a heap overflow, as
+the loop repeatedly doubles the size of a list.
 
-Remarks on the code: the number passed to `newRC` is the number of
-blocks that the resource container is to be allocated.  The size of a
-block in GHC is 4096 KB.  Empirically (this is described in the paper),
-the true memory usage of a container allocate N space will be up to 2N.
-There is also a hierarchical structure to containers (not in the paper);
-at the moment, this is only used internally, and has no effect on the
-semantics of resource containers.
+Differently from the paper, `newRC` accepts a number of blocks to be
+allocated to the resource container.  The size of a block in GHC is 4
+KB.  You also have to provide a parent resource container to associate
+with the container; at the moment, this is only used internally, and has
+no effect on the semantics of resource containers.
 
-At this point, you might try having some fun trying to build some of
-your own space hogs.  Some care should be taken: the most common reasons
-for a limit to not be hit when you expect it to are (1) the program is
-time-bound, not space-bound, and (2) the costs are not being charged to
-the container you think they are being charged to.  In particular, make
-sure you build your programs with `-O`.  If you tweak the previous
-example:
+When constructing synthetic examples, some care should be taken: the
+most common reasons for a limit to not be hit when you expect it to are
+(1) the program is time-bound, not space-bound (check `top`), and (2)
+the costs are not being charged to the container you think they are
+being charged to.  These difficulties are closely related to the
+difficulty of performing microbenchmarks in Haskell: it can be quite
+difficult to tell when a computation is happening, and our paper does
+not introduce any new special forms to Haskell to make this easier.
+Usually, computation that is done by the IO monad will be attributed
+properly, but you still need to be careful.  Here is a slightly tweaked
+version of the previous example:
 
 ```haskell
 loop n = do
-    evaluate n
+    evaluate (length n)
     loop (n ++ n)
 ```
 
-...unoptimized, the cost of this loop is charged to the top-level, and
-not the most recently allocated resource container.  This is because the
-function desugars to `evaluate n >> loop (n ++ n)`, so what an
-unoptimized Haskell program is doing is literally building up a tree of
-IO actions, before actually executing them inside a `withRC`.  These
-quirks are less likely to show up when resource limits are being used in
-real-world settings (where space blowup is due to external output).  The
-`accuracy` in the evaluations demonstrates other tricks for making
-contrived examples work properly.  `withRC1`, described in the paper,
-is another effective technique for ensuring computations happen where
-you want them to.
+When compiled without optimizations, the cost of this loop is charged to
+the top-level, and not the most recently allocated resource container.
+What happened? It turns out these two different uses of do-notation
+compile differently: in the second case, the unoptimized Haskell program
+builds a tree of IO actions, before actually running the actions in the
+`withRC`.  If you need to run a pure computation inside a container,
+use `withRC1`.
 
-Another feature (not described in the paper), is the ability to receive
-callbacks when certain thresholds are met.  This can be done with the
-`listenRC` function:
+Something else you can do (not described in the paper) is the ability to
+receive callbacks when certain thresholds are met.  This can be done
+with the `listenRC` function:
 
 ```haskell
 -- 3.hs
@@ -126,7 +125,7 @@ main = do
     withRC rc $ loop [1]
 
 loop n = do
-    n <- evaluate n
+    _ <- evaluate (length n)
     loop (n ++ n)
 ```
 
@@ -135,6 +134,8 @@ issued an advisory that it is running out of space before it hits a hard
 exception.
 
 ### Resource limits monad
+
+Using the raw resource limits API requires quite a bit of care,
 
 We offer a resource limits monad `CM`, in `Control.Monad.RLimits`, for
 keeping track of what pointers threads have to various resource
@@ -202,3 +203,10 @@ Known bugs:
 * We leak a small amount of memory for every resource container
   allocated.  Fixing this is not conceptually difficult but requires
   how we handle resource container pointers to be restructured.
+
+* The raw resource limits interface has an unsafe function `killRC`
+  (distinct from the `killRC` in the monadic interface). This function
+  is advisory: when a container is killed, the user makes a promise that
+  the container will no longer be used with `withRC`; behavior is
+  undefined otherwise.  We could probably make this interface a little
+  less pointy.
