@@ -6,3 +6,6 @@ __pycache__
 massif.out
 *.txt
 *.csv
+*.swp
+dist
+results

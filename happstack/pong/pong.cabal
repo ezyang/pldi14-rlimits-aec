@@ -1,0 +1,17 @@
+Name:                pong
+Version:             0.1
+Synopsis:            Pong benchmark
+License:             BSD3
+License-file:        LICENSE
+Author:              Michael Snoyman
+Maintainer:          michael@snoyman.com
+Category:            Web
+Build-type:          Simple
+
+Cabal-version:       >=1.2
+
+
+Executable happstack
+  Main-is:             happstack.hs
+  Build-depends:       base > 4, happstack-server
+  Ghc-options:         -O2 -threaded -rtsopts

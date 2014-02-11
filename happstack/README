@@ -1,0 +1,125 @@
+This folder contains code for our Happstack experiments.  It
+comes in two parts.  First is the patched version of Happstack
+to use resource limits in 'happstack-server-7.3.3'; the patch
+is enclosed below for your easy reading.  The second is the 'pong'
+benchmark, which was used to run some numbers, and also test
+Happstack's vulnerability to infinite HTTP header attacks.
+
+Building
+--------
+
+Both the happstack library and the pong binary have been
+pre-built for you.  You can rebuild happstack using:
+
+    cd happstack
+    cabal install
+
+and you can rebuild pong using:
+
+    cd pong
+    cabal configure
+    cabal build
+
+The pong binary lives at `dist/build/happstack/happstack` of the `pong`
+directory.
+
+Reproducing the Happstack bug
+-----------------------------
+
+By default, the pong binary does not use resource limits.  It is thus
+very simple to induce arbitrary memory usage.  Start the pong binary:
+
+    cd pong
+    ./dist/build/happstack/happstack
+
+open up top, and in another window, run:
+
+    nc localhost 3000 < /dev/zero
+
+You will see happstack's memory usage steadily rise.
+
+Next, run Happstack with resource limits enabled:
+
+    RC_TEST=500 ./dist/build/happstack/happstack
+
+When you run the netcat command again, it will terminate immediately,
+and Happstack will log that there was a heap overflow.
+
+Benchmarking
+-----------
+
+Benchmarking is performed by running the './happstack.sh' script.
+Results are written to 'results'.  The specific numbers will be
+a little different due to running in a VM.
+
+To get baseline numbers, run the benchmark suite as:
+
+    ./happstack.sh
+
+To run with resource limits, run the benchmark suite as:
+
+    RC_TEST=500 ./happstack.sh
+
+You should also vary the parameters in `lib.sh`, e.g. number of
+simultaneous connections, etc.
+
+Patch
+-----
+
+Here is the patch we applied to Happstack. It could be made smaller if
+resource limits are turned on unconditionally.
+
+diff --git a/happstack-server.cabal b/happstack-server.cabal
+index ac16c7a..35479b3 100644
+--- a/happstack-server.cabal
++++ b/happstack-server.cabal
+@@ -94,7 +94,8 @@ Library
+                        transformers-base >= 0.4 && < 0.5,
+                        utf8-string >= 0.3.4 && < 0.4,
+                        xhtml,
+-                       zlib
++                       zlib,
++                       rlimits
+ 
+   if flag(network_2_2_3)
+     Build-Depends:     network >= 2.2.3
+diff --git a/src/Happstack/Server/Internal/Listen.hs b/src/Happstack/Server/Internal/Listen.hs
+index f78fe72..991b265 100644
+--- a/src/Happstack/Server/Internal/Listen.hs
++++ b/src/Happstack/Server/Internal/Listen.hs
+@@ -27,6 +27,11 @@ import System.Posix.Signals
+ #endif
+ -}
+ import System.Log.Logger (Priority(..), logM)
++
++import System.Environment
++import Control.RLimits
++
++
+ log':: Priority -> String -> IO ()
+ log' = logM "Happstack.Server.HTTP.Listen"
+ 
+@@ -91,14 +96,22 @@ listen' s conf hand = do
+                Nothing -> forkIO
+                Just tg -> \m -> fst `liftM` TG.forkIO tg m
+   tm <- initialize ((timeout conf) * (10^(6 :: Int)))
++  rc_test <- (fmap read) `fmap` lookupEnv "RC_TEST"
+   -- http:// loop
+   log' NOTICE ("Listening for http:// on port " ++ show port')
++  parent <- getCurrentRC
+   let eh (x::SomeException) = when ((fromException x) /= Just ThreadKilled) $ log' ERROR ("HTTP request failed with: " ++ show x)
+       work (sock, hn, p) =
+           do tid <- myThreadId
+              thandle <- register tm (killThread tid)
+              let timeoutIO = TS.timeoutSocketIO thandle sock
+-             request timeoutIO (logAccess conf) (hn,fromIntegral p) hand `E.catch` eh
++             case rc_test of
++                Nothing ->
++                    request timeoutIO (logAccess conf) (hn,fromIntegral p) hand `E.catch` eh
++                Just l -> do
++                     rc <- newRC l parent
++                     (withRC rc $ request timeoutIO (logAccess conf) (hn,fromIntegral p) hand) `E.catch` eh
++                     killRC rc
+              -- remove thread from timeout table
+              cancel thandle
+              sClose sock
