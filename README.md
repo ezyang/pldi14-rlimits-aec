@@ -210,3 +210,8 @@ Known bugs:
   the container will no longer be used with `withRC`; behavior is
   undefined otherwise.  We could probably make this interface a little
   less pointy.
+
+* Our HEAP_ALLOCED patch does not work with SplitObjs; thus be sure to
+  compile GHC with that setting turned off, and to not use
+  `--split-objs` when compiling libraries. See also:
+  https://ghc.haskell.org/trac/ghc/ticket/8199#comment:20
