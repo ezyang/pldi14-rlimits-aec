@@ -1,5 +1,9 @@
 # Resource Limits for Haskell: PLDI'14 Artifact Evaluation
 
+**Warning:** Since the PLDI artifact evaluation, development has
+progressed further and some bugs have been fixed.  The VM image
+has not been updated for historical interest, but be aware!
+
 This page describes the set of GHC patches and support libraries, as
 well as evaluation code, for the paper
 [Resource Limits for Haskell](http://ezyang.com/papers/ezyang14-rlimits.pdf).  You can access our artifact via
