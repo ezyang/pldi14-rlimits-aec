@@ -198,11 +198,11 @@ Features which are known not to work:
 
 * Compacting garbage collection
 
-Known bugs:
+Known bugs in the VM (all of these bugs have since been fixed in the
+Git repository, but I haven't updated the VM with the new software):
 
 * We leak a small amount of memory for every resource container
-  allocated.  Fixing this is not conceptually difficult but requires
-  how we handle resource container pointers to be restructured.
+  allocated.
 
 * The raw resource limits interface has an unsafe function `killRC`
   (distinct from the `killRC` in the monadic interface). This function
