@@ -64,7 +64,7 @@ tricky; more on this later):
 import Control.RLimits
 import Control.Exception
 
-main, program :: IO ()
+main :: IO ()
 
 main = do
     parent_rc <- getCurrentRC
@@ -120,7 +120,7 @@ with the `listenRC` function:
 import Control.RLimits
 import Control.Exception
 
-main, program :: IO ()
+main :: IO ()
 
 main = do
     parent_rc <- getCurrentRC
